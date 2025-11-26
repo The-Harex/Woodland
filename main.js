@@ -3,6 +3,10 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { createNoise2D } from 'simplex-noise';
 import { io } from 'socket.io-client';
 
+const lobbyMusic = new Audio('./Spooky-Horror-Story---1m02_AdobeStock_1728245492.wav');
+lobbyMusic.loop = true;
+lobbyMusic.volume = 0.5;
+
 // Scene Setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // Sky blue
@@ -127,6 +131,9 @@ socket.on('youAreHost', () => {
         isGameRunningOnServer = true;
         lobbyScreen.classList.add('hidden');
         
+        lobbyMusic.pause();
+        lobbyMusic.currentTime = 0;
+        
         // Randomize start position
         const x = (Math.random() - 0.5) * worldWidth;
         const z = (Math.random() - 0.5) * worldDepth;
@@ -143,6 +150,8 @@ socket.on('youAreHost', () => {
 
     socket.on('joinError', (msg) => {
         alert(msg);
+        lobbyMusic.pause();
+        lobbyMusic.currentTime = 0;
     });
 
     socket.on('currentPlayers', (players) => {
@@ -436,6 +445,9 @@ joinLobbyBtn.addEventListener('click', () => {
         return;
     }
 
+    // Start music on user interaction
+    lobbyMusic.play().catch(e => console.warn("Audio play failed", e));
+
     if (!socket) {
         initSocket();
     }
@@ -448,6 +460,9 @@ startMatchBtn.addEventListener('click', () => {
         // Join existing game
         isGameStarted = true;
         lobbyScreen.classList.add('hidden');
+        
+        lobbyMusic.pause();
+        lobbyMusic.currentTime = 0;
         
         // Randomize start position
         const x = (Math.random() - 0.5) * worldWidth;
@@ -942,6 +957,8 @@ function endGame() {
     lobbyScreen.classList.remove('hidden'); // Show lobby
     lobbyWaiting.classList.remove('hidden'); // Show waiting room
     lobbyLogin.classList.add('hidden');
+    
+    lobbyMusic.play().catch(e => console.warn("Audio play failed", e));
     
     controls.unlock(); // Ensure mouse is free
 
