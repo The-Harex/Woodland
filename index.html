@@ -17,31 +17,78 @@
     </script>
   </head>
   <body>
-    <div id="instructions">
-      <h1>Woodland Walk</h1>
-      <input type="text" id="gamer-name" placeholder="Enter Gamer Name" />
-      <button id="start-btn">Start Game</button>
-      <p>WASD to Move, SPACE to Jump, Mouse to Look</p>
-      <p>Left Click to Shoot</p>
-      <div id="share-container">
-        <p>Invite Friends:</p>
-        <input type="text" id="share-link" readonly value="Loading..." />
-        <button id="copy-link-btn">Copy</button>
+    <div id="lobby-screen">
+      <h1>Woodland Walk Lobby</h1>
+      <div id="lobby-card">
+        <div id="lobby-login">
+          <input type="text" id="gamer-name" placeholder="Enter Gamer Name" />
+          <button id="join-lobby-btn" class="game-btn primary">Join Lobby</button>
+        </div>
+        <div id="lobby-waiting" class="hidden">
+          <div class="lobby-column">
+            <h2>Waiting for Players...</h2>
+            <ul id="lobby-player-list"></ul>
+            <div id="difficulty-container">
+              <label for="difficulty-select">Difficulty:</label>
+              <select id="difficulty-select">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+            <button id="start-match-btn" class="game-btn primary">Start Match</button>
+            <p id="lobby-status">Waiting for host to start...</p>
+          </div>
+          <div class="lobby-column lobby-info">
+            <h3>Mission Brief</h3>
+            <p>Survive 10 minutes against the undead horde.</p>
+            <h4>Victory Conditions</h4>
+            <ul class="info-list">
+               <li><strong>Solo:</strong> Survive until time runs out.</li>
+               <li><strong>PvP:</strong> Player with the most kills wins.</li>
+            </ul>
+          </div>
+        </div>
+        <div id="lobby-divider"></div>
+        <div id="lobby-instructions">
+          <h3>How to Play</h3>
+          <ul>
+            <li><strong>WASD</strong> to Move</li>
+            <li><strong>Mouse</strong> to Look</li>
+            <li><strong>Left Click</strong> to Shoot</li>
+            <li><strong>Space</strong> to Jump</li>
+            <li><strong>Esc</strong> to Pause</li>
+          </ul>
+        </div>
       </div>
-      <p class="credits">Created by Ryan Finney</p>
     </div>
+
+    <div id="pause-menu" class="hidden">
+      <h1>Paused</h1>
+      <button id="resume-btn" class="game-btn primary">Resume</button>
+      <button id="quit-btn" class="game-btn secondary">Return to Lobby</button>
+    </div>
+
     <div id="player-list"></div>
     <div id="minimap-border"></div>
+    <div id="horde-timer">Horde: 60</div>
+    <div id="game-timer">Time Left: 10:00</div>
     <div id="ui-container">
+      <div id="health-label">Health</div>
       <div id="health-bar-container">
         <div id="health-bar"></div>
       </div>
     </div>
     <div id="crosshair"></div>
     <div id="game-over-screen" class="hidden">
-      <h1>Game Over</h1>
-      <button id="respawn-btn">Respawn</button>
-      <button id="end-game-btn">End Game</button>
+      <h1>You Died</h1>
+      <p id="respawn-timer">Respawning in 3...</p>
+    </div>
+
+    <div id="victory-screen" class="hidden">
+      <h1>Victory!</h1>
+      <p>You survived the horde.</p>
+      <button id="victory-lobby-btn" class="game-btn primary">Return to Lobby</button>
     </div>
     <script type="module" src="./main.js"></script>
   </body>

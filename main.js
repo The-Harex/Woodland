@@ -31,6 +31,43 @@ document.body.appendChild(renderer.domElement);
 // Networking
 let socket;
 const otherPlayers = {};
+const serverZombies = {};
+const serverZombieMaterial = new THREE.MeshStandardMaterial({ color: 0xffa500 }); // Orange
+
+function createServerZombie(data) {
+    if (serverZombies[data.id]) return;
+
+    const mesh = new THREE.Group();
+    // Use data.y if provided, else calculate
+    const y = data.y !== undefined ? data.y : getTerrainHeight(data.x, data.z) + 0.9;
+    mesh.position.set(data.x, y, data.z);
+    scene.add(mesh);
+
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 0.8), serverZombieMaterial.clone());
+    body.castShadow = true;
+    body.receiveShadow = true;
+    mesh.add(body);
+
+    // Arms
+    const armGeometry = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+    const armMaterial = new THREE.MeshStandardMaterial({ color: 0xffa500 });
+
+    const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+    leftArm.position.set(-0.5, 0.2, 0.5);
+    leftArm.rotation.x = -Math.PI / 2;
+    leftArm.castShadow = true;
+    mesh.add(leftArm);
+
+    const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+    rightArm.position.set(0.5, 0.2, 0.5);
+    rightArm.rotation.x = -Math.PI / 2;
+    rightArm.castShadow = true;
+    mesh.add(rightArm);
+
+    serverZombies[data.id] = { mesh: mesh, id: data.id };
+}
+
 const playerListContainer = document.getElementById('player-list');
 
 function initSocket() {
@@ -48,10 +85,60 @@ function initSocket() {
         // Wait for user to click start to join
     });
 
-    socket.on('joinSuccess', (data) => {
-        gamerName = data.name;
+let isHost = false;
+
+function updateLobbyUI() {
+    const difficultyContainer = document.getElementById('difficulty-container');
+    if (isGameRunningOnServer) {
+        document.getElementById('lobby-status').innerText = "Game in Progress - Join to Spectate/Play";
+        startMatchBtn.innerText = "Join Game";
+        startMatchBtn.style.display = 'block';
+        if (difficultyContainer) difficultyContainer.style.display = 'none';
+    } else {
+        if (isHost) {
+            startMatchBtn.style.display = 'block';
+            startMatchBtn.innerText = "Start Match";
+            document.getElementById('lobby-status').innerText = "You are the Host. Click Start Match when ready.";
+            if (difficultyContainer) difficultyContainer.style.display = 'flex';
+        } else {
+            startMatchBtn.style.display = 'none';
+            document.getElementById('lobby-status').innerText = "Waiting for host to start...";
+            if (difficultyContainer) difficultyContainer.style.display = 'none';
+        }
+    }
+}
+
+socket.on('joinSuccess', (data) => {
+    gamerName = data.name;
+    isHost = data.isHost;
+    updateLobbyUI();
+    // Switch to waiting room
+    lobbyLogin.classList.add('hidden');
+    lobbyWaiting.classList.remove('hidden');
+});
+
+socket.on('youAreHost', () => {
+    isHost = true;
+    updateLobbyUI();
+});
+
+    socket.on('gameStarted', () => {
         isGameStarted = true;
+        isGameRunningOnServer = true;
+        lobbyScreen.classList.add('hidden');
+        
+        // Randomize start position
+        const x = (Math.random() - 0.5) * worldWidth;
+        const z = (Math.random() - 0.5) * worldDepth;
+        const y = getTerrainHeight(x, z) + 50; // Drop from sky
+        
+        camera.position.set(x, y, z);
+        velocity.set(0, 0, 0);
+
         controls.lock();
+    });    socket.on('gameStateUpdate', (isRunning) => {
+        isGameRunningOnServer = isRunning;
+        updateLobbyUI();
     });
 
     socket.on('joinError', (msg) => {
@@ -65,6 +152,11 @@ function initSocket() {
             }
         });
         updatePlayerList(players);
+        updateLobbyList(players);
+    });
+
+    socket.on('lobbyUpdate', (players) => {
+        updateLobbyList(players);
     });
 
     socket.on('newPlayer', (playerInfo) => {
@@ -84,10 +176,20 @@ function initSocket() {
 
     socket.on('nameUpdated', (playerInfo) => {
         updatePlayerListEntry(playerInfo);
+        // Also update lobby list if needed, but usually name update happens on join
     });
 
-    socket.on('playerDamaged', (amount) => {
-        damagePlayer(amount);
+    socket.on('playerDamaged', (amount, shooterId) => {
+        damagePlayer(amount, shooterId);
+    });
+
+    socket.on('updatePlayerKills', (data) => {
+        const tag = document.getElementById(`player-tag-${data.id}`);
+        if (tag) {
+            const currentText = tag.innerText;
+            const namePart = currentText.split(' - Kills:')[0];
+            tag.innerText = `${namePart} - Kills: ${data.kills}`;
+        }
     });
 
     socket.on('playerDied', (id) => {
@@ -104,6 +206,56 @@ function initSocket() {
             otherPlayers[id].mesh.rotation.x = 0;
             // Position will be updated by next movement packet
         }
+    });
+
+    socket.on('hordeTimerUpdate', (nextTime) => {
+        console.log('Received horde timer update:', nextTime);
+        nextHordeTime = nextTime;
+    });
+
+    socket.on('gameTimerUpdate', (endTime) => {
+        gameEndTime = endTime;
+    });
+
+    socket.on('hordeSpawned', (newZombies) => {
+        newZombies.forEach(z => createServerZombie(z));
+    });
+
+    socket.on('zombieUpdate', (updates) => {
+        updates.forEach(u => {
+            if (serverZombies[u.id]) {
+                const mesh = serverZombies[u.id].mesh;
+                mesh.position.x = u.x;
+                mesh.position.z = u.z;
+                mesh.rotation.y = u.rotation;
+                mesh.position.y = getTerrainHeight(u.x, u.z) + 0.9;
+            } else {
+                createServerZombie({ id: u.id, x: u.x, z: u.z });
+            }
+        });
+    });
+
+    socket.on('zombieDied', (id) => {
+        if (serverZombies[id]) {
+            scene.remove(serverZombies[id].mesh);
+            delete serverZombies[id];
+        }
+    });
+
+    socket.on('gameVictory', () => {
+        controls.unlock();
+        victoryScreen.classList.remove('hidden');
+    });
+    
+    socket.on('zombieDamaged', (data) => {
+         if (serverZombies[data.id]) {
+            const body = serverZombies[data.id].mesh.children[0];
+            const originalColor = body.material.color.getHex();
+            body.material.color.setHex(0xff0000);
+            setTimeout(() => {
+                body.material.color.setHex(originalColor);
+            }, 100);
+         }
     });
 }
 
@@ -169,7 +321,7 @@ function updatePlayerListEntry(p) {
         tag.style.textDecoration = "underline";
     }
     
-    tag.innerText = displayName;
+    tag.innerText = `${displayName} - Kills: ${p.kills || 0}`;
     
     // Set text color to player color for visibility
     const colorHex = '#' + p.color.toString(16).padStart(6, '0');
@@ -184,6 +336,27 @@ function updatePlayerList(players) {
     playerListContainer.innerHTML = ''; // Clear list to ensure correct order/cleanup
     Object.values(players).forEach(p => {
         updatePlayerListEntry(p);
+    });
+}
+
+function updateLobbyList(players) {
+    if (!lobbyPlayerList) return;
+    lobbyPlayerList.innerHTML = '';
+    Object.values(players).forEach(p => {
+        // Only show joined players in the list
+        if (p.joined) {
+            const li = document.createElement('li');
+            li.innerText = `${p.name} (Kills: ${p.kills || 0})`;
+            if (socket && p.id === socket.id) {
+                li.innerText += " (You)";
+                li.style.fontWeight = "bold";
+            }
+            if (p.isHost) {
+                li.innerText += " [HOST]";
+                li.style.color = "#ffff00";
+            }
+            lobbyPlayerList.appendChild(li);
+        }
     });
 }
 
@@ -204,25 +377,58 @@ scene.add(dirLight);
 
 // Controls
 const controls = new PointerLockControls(camera, document.body);
-const instructions = document.getElementById('instructions');
-const startBtn = document.getElementById('start-btn');
+const pauseMenu = document.getElementById('pause-menu');
+const resumeBtn = document.getElementById('resume-btn');
+const quitBtn = document.getElementById('quit-btn');
+const lobbyScreen = document.getElementById('lobby-screen');
+const lobbyLogin = document.getElementById('lobby-login');
+const lobbyWaiting = document.getElementById('lobby-waiting');
+const lobbyPlayerList = document.getElementById('lobby-player-list');
+const joinLobbyBtn = document.getElementById('join-lobby-btn');
+const startMatchBtn = document.getElementById('start-match-btn');
 const gamerNameInput = document.getElementById('gamer-name');
-const shareLinkInput = document.getElementById('share-link');
-const copyLinkBtn = document.getElementById('copy-link-btn');
 
-// Share Link Logic
-shareLinkInput.value = window.location.href;
-copyLinkBtn.addEventListener('click', () => {
-    shareLinkInput.select();
-    document.execCommand('copy');
-    copyLinkBtn.innerText = "Copied!";
-    setTimeout(() => copyLinkBtn.innerText = "Copy", 2000);
-});
+// Share Link Logic (Removed)
 
 let gamerName = "Player";
 let isGameStarted = false;
+let isGameRunningOnServer = false;
+let nextHordeTime = 0;
+let gameEndTime = 0;
+const hordeTimerElement = document.getElementById('horde-timer');
+const gameTimerElement = document.getElementById('game-timer');
 
-startBtn.addEventListener('click', () => {
+setInterval(() => {
+    const now = Date.now();
+
+    if (hordeTimerElement) {
+        if (nextHordeTime > 0) {
+            const diff = Math.max(0, Math.ceil((nextHordeTime - now) / 1000));
+            hordeTimerElement.innerText = `Horde: ${diff}`;
+            if (diff <= 5) {
+                hordeTimerElement.style.color = "red";
+            } else {
+                hordeTimerElement.style.color = "white";
+            }
+        } else {
+            hordeTimerElement.innerText = "Horde: --";
+        }
+    }
+
+    if (gameTimerElement) {
+        if (gameEndTime > 0) {
+            const diffSeconds = Math.max(0, Math.ceil((gameEndTime - now) / 1000));
+            const minutes = Math.floor(diffSeconds / 60);
+            const seconds = diffSeconds % 60;
+            const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            gameTimerElement.innerText = `Time Left: ${formattedTime}`;
+        } else {
+            gameTimerElement.innerText = "Time Left: --:--";
+        }
+    }
+}, 1000);
+
+joinLobbyBtn.addEventListener('click', () => {
     const nameInput = gamerNameInput.value.trim();
     
     if (nameInput === "") {
@@ -237,36 +443,47 @@ startBtn.addEventListener('click', () => {
     socket.emit('requestJoin', nameInput);
 });
 
-// Resume game when clicking instructions if game already started
-instructions.addEventListener('click', (e) => {
-    // Only lock if game is started and we didn't click an input/button
-    if (isGameStarted && e.target === instructions) {
+startMatchBtn.addEventListener('click', () => {
+    if (isGameRunningOnServer) {
+        // Join existing game
+        isGameStarted = true;
+        lobbyScreen.classList.add('hidden');
+        
+        // Randomize start position
+        const x = (Math.random() - 0.5) * worldWidth;
+        const z = (Math.random() - 0.5) * worldDepth;
+        const y = getTerrainHeight(x, z) + 50; // Drop from sky
+        
+        camera.position.set(x, y, z);
+        velocity.set(0, 0, 0);
+
         controls.lock();
+    } else {
+        // Start new game
+        if (socket) {
+            const difficulty = document.getElementById('difficulty-select').value;
+            socket.emit('startGame', difficulty);
+        }
     }
 });
 
+resumeBtn.addEventListener('click', () => {
+    controls.lock();
+});
+
+quitBtn.addEventListener('click', () => {
+    endGame();
+    pauseMenu.classList.add('hidden');
+});
+
 controls.addEventListener('lock', () => {
-    instructions.classList.add('hidden');
+    pauseMenu.classList.add('hidden');
 });
 
 controls.addEventListener('unlock', () => {
-    instructions.classList.remove('hidden');
-    
-    if (isGameStarted) {
-        // Hide name input and start button, show "Click to Resume"
-        gamerNameInput.style.display = 'none';
-        startBtn.style.display = 'none';
-        
-        let resumeMsg = document.getElementById('resume-msg');
-        if (!resumeMsg) {
-            resumeMsg = document.createElement('h2');
-            resumeMsg.id = 'resume-msg';
-            resumeMsg.innerText = "Click to Resume";
-            resumeMsg.style.marginTop = "20px";
-            // Insert after title
-            instructions.insertBefore(resumeMsg, gamerNameInput);
-        }
-        resumeMsg.style.display = 'block';
+    if (isGameStarted && !isDead && !isSpectating) {
+        pauseMenu.classList.remove('hidden');
+        // velocity.set(0, 0, 0); // Allow momentum to continue
     }
 });
 
@@ -621,12 +838,16 @@ for (let i = 0; i < 20; i++) {
 
 // Player Stats
 let playerHealth = 100;
+let isDead = false;
+let isSpectating = false;
 const healthBar = document.getElementById('health-bar');
 const gameOverScreen = document.getElementById('game-over-screen');
-const respawnBtn = document.getElementById('respawn-btn');
-const endGameBtn = document.getElementById('end-game-btn');
+const victoryScreen = document.getElementById('victory-screen');
+const victoryLobbyBtn = document.getElementById('victory-lobby-btn');
 
-function damagePlayer(amount) {
+function damagePlayer(amount, shooterId) {
+    if (isDead || isSpectating) return; // Don't take damage if dead
+
     playDamageSound();
     playerHealth -= amount;
     if (playerHealth < 0) playerHealth = 0;
@@ -639,30 +860,66 @@ function damagePlayer(amount) {
     }, 100);
 
     if (playerHealth === 0) {
-        showGameOver();
-        if (socket) {
-            socket.emit('playerDied');
-        }
+        die(shooterId);
+    }
+}
+
+function die(killerId) {
+    isDead = true;
+    weapon.visible = false; // Hide weapon
+    showGameOver();
+    if (socket) {
+        socket.emit('playerDied', killerId);
     }
 }
 
 function showGameOver() {
     controls.unlock();
     const gameOverTitle = gameOverScreen.querySelector('h1');
-    gameOverTitle.innerText = `Game Over, ${gamerName}!`;
+    gameOverTitle.innerText = `You Died`;
     gameOverScreen.classList.remove('hidden');
+    
+    let countdown = 3;
+    const timerElement = document.getElementById('respawn-timer');
+    timerElement.innerText = `Respawning in ${countdown}...`;
+    
+    const interval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+            timerElement.innerText = `Respawning in ${countdown}...`;
+        } else {
+            clearInterval(interval);
+            respawn();
+        }
+    }, 1000);
 }
 
-respawnBtn.addEventListener('click', () => {
-    respawn();
-});
-
-endGameBtn.addEventListener('click', () => {
+victoryLobbyBtn.addEventListener('click', () => {
     endGame();
 });
 
+function respawn() {
+    resetPlayerState();
+    gameOverScreen.classList.add('hidden');
+    controls.lock();
+    if (socket) {
+        socket.emit('playerRespawn');
+    }
+}
+
+function startSpectating() {
+    isSpectating = true;
+    gameOverScreen.classList.add('hidden');
+    controls.lock();
+    // Move camera up a bit
+    camera.position.y += 5;
+}
+
 function resetPlayerState() {
     playerHealth = 100;
+    isDead = false;
+    isSpectating = false;
+    weapon.visible = true;
     healthBar.style.width = '100%';
     
     // Random Respawn Position
@@ -674,32 +931,23 @@ function resetPlayerState() {
     velocity.set(0, 0, 0);
 }
 
-function respawn() {
-    resetPlayerState();
-    gameOverScreen.classList.add('hidden');
-    controls.lock();
-    if (socket) {
-        socket.emit('playerRespawn');
-    }
-}
-
 function endGame() {
     resetPlayerState();
     gameOverScreen.classList.add('hidden');
+    victoryScreen.classList.add('hidden');
+    pauseMenu.classList.add('hidden');
     
     // Reset Game State
     isGameStarted = false;
+    lobbyScreen.classList.remove('hidden'); // Show lobby
+    lobbyWaiting.classList.remove('hidden'); // Show waiting room
+    lobbyLogin.classList.add('hidden');
     
-    // Show Start Screen Elements
-    gamerNameInput.style.display = 'inline-block';
-    startBtn.style.display = 'inline-block';
-    
-    const resumeMsg = document.getElementById('resume-msg');
-    if (resumeMsg) {
-        resumeMsg.style.display = 'none';
+    controls.unlock(); // Ensure mouse is free
+
+    if (socket) {
+        socket.emit('returnToLobby');
     }
-    
-    // Instructions are already visible because controls are unlocked
 }
 
 // Player Body (Visible when looking down)
@@ -813,10 +1061,11 @@ function shoot() {
     
     // Get all zombie meshes
     const zombieMeshes = zombies.map(z => z.mesh);
+    const serverZombieMeshes = Object.values(serverZombies).map(z => z.mesh);
     // Get all player meshes
     const playerMeshes = Object.values(otherPlayers).map(p => p.mesh);
     
-    const allTargets = [...zombieMeshes, ...playerMeshes];
+    const allTargets = [...zombieMeshes, ...serverZombieMeshes, ...playerMeshes];
     const intersects = raycaster.intersectObjects(allTargets, true); // recursive for parts
 
     if (intersects.length > 0) {
@@ -827,15 +1076,21 @@ function shoot() {
             hitObject = hitObject.parent;
         }
         
-        // Check if it's a zombie
+        // Check if it's a local zombie
         const hitZombie = zombies.find(z => z.mesh === hitObject);
         if (hitZombie) {
             hitZombie.takeDamage(25); // 4 shots to kill
         } else {
-            // Check if it's a player
-            const hitPlayerId = Object.keys(otherPlayers).find(id => otherPlayers[id].mesh === hitObject);
-            if (hitPlayerId && socket) {
-                socket.emit('shootPlayer', hitPlayerId);
+            // Check if it's a server zombie
+            const hitServerZombieId = Object.keys(serverZombies).find(id => serverZombies[id].mesh === hitObject);
+            if (hitServerZombieId && socket) {
+                socket.emit('shootZombie', hitServerZombieId);
+            } else {
+                // Check if it's a player
+                const hitPlayerId = Object.keys(otherPlayers).find(id => otherPlayers[id].mesh === hitObject);
+                if (hitPlayerId && socket) {
+                    socket.emit('shootPlayer', hitPlayerId);
+                }
             }
         }
     }
@@ -929,50 +1184,59 @@ function animate() {
     // Cap delta to prevent physics explosions on lag spikes
     if (delta > 0.1) delta = 0.1;
 
-    if (controls.isLocked) {
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
+    // Update Zombies (Always update, even if paused)
+    for (const zombie of zombies) {
+        zombie.update(delta, camera.position);
+    }
 
+    // Physics & Movement
+    velocity.x -= velocity.x * 10.0 * delta;
+    velocity.z -= velocity.z * 10.0 * delta;
+
+    // Input Processing (Only when locked)
+    if (controls.isLocked) {
         direction.z = Number(moveState.forward) - Number(moveState.backward);
         direction.x = Number(moveState.right) - Number(moveState.left);
         direction.normalize();
 
         if (moveState.forward || moveState.backward) velocity.z -= direction.z * 100.0 * delta;
         if (moveState.left || moveState.right) velocity.x -= direction.x * 100.0 * delta;
+    }
 
-        // Move and Check Collisions (X Axis)
-        const oldPos = camera.position.clone();
-        controls.moveRight(-velocity.x * delta);
-        if (checkCollisions(camera.position)) {
-            camera.position.x = oldPos.x;
-            camera.position.z = oldPos.z;
-            velocity.x = 0;
-        }
+    // Move and Check Collisions (X Axis)
+    const oldPos = camera.position.clone();
+    controls.moveRight(-velocity.x * delta);
+    if (checkCollisions(camera.position)) {
+        camera.position.x = oldPos.x;
+        camera.position.z = oldPos.z;
+        velocity.x = 0;
+    }
 
-        // Move and Check Collisions (Z Axis)
-        const oldPos2 = camera.position.clone();
-        controls.moveForward(-velocity.z * delta);
-        if (checkCollisions(camera.position)) {
-            camera.position.x = oldPos2.x;
-            camera.position.z = oldPos2.z;
-            velocity.z = 0;
-        }
+    // Move and Check Collisions (Z Axis)
+    const oldPos2 = camera.position.clone();
+    controls.moveForward(-velocity.z * delta);
+    if (checkCollisions(camera.position)) {
+        camera.position.x = oldPos2.x;
+        camera.position.z = oldPos2.z;
+        velocity.z = 0;
+    }
 
-        // Ground Following
-        const groundHeight = getTerrainHeight(camera.position.x, camera.position.z);
+    // Ground Following
+    const groundHeight = getTerrainHeight(camera.position.x, camera.position.z);
 
-        // Physics
-        velocity.y -= 30.0 * delta; // Gravity
-        camera.position.y += velocity.y * delta;
+    // Physics
+    velocity.y -= 30.0 * delta; // Gravity
+    camera.position.y += velocity.y * delta;
 
-        // Ground Collision
-        if (camera.position.y < groundHeight + 2) {
-            velocity.y = 0;
-            camera.position.y = groundHeight + 2;
-            canJump = true;
-        }
+    // Ground Collision
+    if (!isSpectating && camera.position.y < groundHeight + 2) {
+        velocity.y = 0;
+        camera.position.y = groundHeight + 2;
+        canJump = true;
+    }
 
-        // Update Body Position & Rotation
+    // Update Body Position & Rotation
+    if (!isSpectating) {
         playerBody.position.x = camera.position.x;
         playerBody.position.z = camera.position.z;
         playerBody.position.y = camera.position.y - 0.9; // Offset to be below camera
@@ -998,11 +1262,9 @@ function animate() {
                 rotation: playerRotation
             });
         }
-
-        // Update Zombies
-        for (const zombie of zombies) {
-            zombie.update(delta, camera.position);
-        }
+    } else {
+        // Spectator Mode: Don't update body or send movement (or send special spectator packet?)
+        // For now, just don't send movement. Server will keep last known position (dead body).
     }
 
     prevTime = time;
