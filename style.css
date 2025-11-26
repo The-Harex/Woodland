@@ -1,0 +1,224 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: sans-serif;
+}
+
+#instructions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: white;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.3s;
+}
+
+#instructions.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#ui-container {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  pointer-events: none;
+}
+
+#health-bar-container {
+  width: 200px;
+  height: 20px;
+  background-color: #333;
+  border: 2px solid #000;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#health-bar {
+  width: 100%;
+  height: 100%;
+  background-color: #ff0000;
+  transition: width 0.2s;
+}
+
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+#crosshair::before,
+#crosshair::after {
+  content: '';
+  position: absolute;
+  background: white;
+}
+
+#crosshair::before {
+  top: 9px;
+  left: 0;
+  width: 20px;
+  height: 2px;
+}
+
+#crosshair::after {
+  top: 0;
+  left: 9px;
+  width: 2px;
+  height: 20px;
+}
+
+#game-over-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  z-index: 20;
+}
+
+#game-over-screen.hidden {
+  display: none;
+}
+
+#respawn-btn {
+  padding: 15px 30px;
+  font-size: 24px;
+  cursor: pointer;
+  background: #ff0000;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin-top: 20px;
+}
+
+#respawn-btn:hover {
+  background: #cc0000;
+}
+
+#end-game-btn {
+  padding: 15px 30px;
+  font-size: 24px;
+  cursor: pointer;
+  background: #555;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  margin-top: 20px;
+  margin-left: 10px;
+}
+
+#end-game-btn:hover {
+  background: #333;
+}
+
+#gamer-name {
+  padding: 10px;
+  font-size: 16px;
+  border-radius: 5px;
+  border: none;
+  margin-bottom: 10px;
+  width: 200px;
+  pointer-events: auto;
+  user-select: auto;
+}
+
+#start-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  border-radius: 5px;
+  border: none;
+  background-color: #4CAF50;
+  color: white;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#start-btn:hover {
+  background-color: #45a049;
+}
+
+.credits {
+  margin-top: 20px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+#share-container {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+}
+
+#share-link {
+  padding: 5px;
+  border-radius: 3px;
+  border: none;
+  width: 200px;
+  margin-right: 5px;
+  color: #333;
+}
+
+#copy-link-btn {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 3px;
+  background: #2196F3;
+  color: white;
+  cursor: pointer;
+}
+
+#copy-link-btn:hover {
+  background: #0b7dda;
+}
+
+#player-list {
+  position: absolute;
+  top: 180px; /* Moved down to make room for minimap */
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.player-tag {
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border-radius: 5px;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px black;
+  border-left: 5px solid transparent; /* Color will be set via JS */
+}
+
+/* Minimap Border (Optional, but helps visibility) */
+#minimap-border {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 150px;
+  height: 150px;
+  border: 2px solid white;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 5;
+}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Woodland Walk</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+          "simplex-noise": "https://unpkg.com/simplex-noise@4.0.1/dist/esm/simplex-noise.js",
+          "socket.io-client": "https://cdn.socket.io/4.7.2/socket.io.esm.min.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="instructions">
+      <h1>Woodland Walk</h1>
+      <input type="text" id="gamer-name" placeholder="Enter Gamer Name" />
+      <button id="start-btn">Start Game</button>
+      <p>WASD to Move, SPACE to Jump, Mouse to Look</p>
+      <p>Left Click to Shoot</p>
+      <div id="share-container">
+        <p>Invite Friends:</p>
+        <input type="text" id="share-link" readonly value="Loading..." />
+        <button id="copy-link-btn">Copy</button>
+      </div>
+      <p class="credits">Created by Ryan Finney</p>
+    </div>
+    <div id="player-list"></div>
+    <div id="minimap-border"></div>
+    <div id="ui-container">
+      <div id="health-bar-container">
+        <div id="health-bar"></div>
+      </div>
+    </div>
+    <div id="crosshair"></div>
+    <div id="game-over-screen" class="hidden">
+      <h1>Game Over</h1>
+      <button id="respawn-btn">Respawn</button>
+      <button id="end-game-btn">End Game</button>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
