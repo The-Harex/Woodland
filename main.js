@@ -252,6 +252,7 @@ socket.on('youAreHost', () => {
     });
 
     socket.on('gameVictory', () => {
+        isVictory = true;
         controls.unlock();
         victoryScreen.classList.remove('hidden');
     });
@@ -396,6 +397,7 @@ const lobbyPlayerList = document.getElementById('lobby-player-list');
 const joinLobbyBtn = document.getElementById('join-lobby-btn');
 const startMatchBtn = document.getElementById('start-match-btn');
 const gamerNameInput = document.getElementById('gamer-name');
+const musicToggleBtn = document.getElementById('music-toggle-btn');
 
 // Share Link Logic (Removed)
 
@@ -496,7 +498,7 @@ controls.addEventListener('lock', () => {
 });
 
 controls.addEventListener('unlock', () => {
-    if (isGameStarted && !isDead && !isSpectating) {
+    if (isGameStarted && !isDead && !isSpectating && !isVictory) {
         pauseMenu.classList.remove('hidden');
         // velocity.set(0, 0, 0); // Allow momentum to continue
     }
@@ -855,6 +857,7 @@ for (let i = 0; i < 20; i++) {
 let playerHealth = 100;
 let isDead = false;
 let isSpectating = false;
+let isVictory = false;
 const healthBar = document.getElementById('health-bar');
 const gameOverScreen = document.getElementById('game-over-screen');
 const victoryScreen = document.getElementById('victory-screen');
@@ -934,6 +937,7 @@ function resetPlayerState() {
     playerHealth = 100;
     isDead = false;
     isSpectating = false;
+    isVictory = false;
     weapon.visible = true;
     healthBar.style.width = '100%';
     
@@ -1329,4 +1333,19 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Music Toggle Logic
+musicToggleBtn.addEventListener('click', () => {
+    if (lobbyMusic.muted) {
+        lobbyMusic.muted = false;
+        musicToggleBtn.innerText = "🔊 Music: On";
+        // Ensure it's playing if we are in lobby
+        if (lobbyMusic.paused && !isGameStarted) {
+             lobbyMusic.play().catch(e => console.warn(e));
+        }
+    } else {
+        lobbyMusic.muted = true;
+        musicToggleBtn.innerText = "🔇 Music: Off";
+    }
 });
